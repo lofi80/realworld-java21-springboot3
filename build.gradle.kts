@@ -2,6 +2,7 @@ import org.springframework.boot.gradle.tasks.bundling.BootJar
 
 plugins {
     java
+    jacoco
     alias(libs.plugins.spotless)
     alias(libs.plugins.spring.boot) apply false
     alias(libs.plugins.spring.dependency.management) apply false
@@ -18,6 +19,7 @@ allprojects {
             .get()
             .pluginId,
     )
+    plugins.apply("jacoco")
     plugins.apply(
         versionCatalog.plugins.spotless
             .get()
@@ -95,5 +97,56 @@ subprojects {
 
     tasks.getByName<Jar>("jar") {
         enabled = true
+    }
+
+    // JaCoCo configuration
+    jacoco {
+        toolVersion = "0.8.11"
+    }
+
+    tasks.withType<JacocoReport> {
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
+        }
+        dependsOn(tasks.test)
+    }
+
+    tasks.register<JacocoReport>("jacocoRootReport") {
+        dependsOn(tasks.test)
+        executionData.setFrom(fileTree(buildDir).include("/jacoco/*.exec"))
+
+        sourceDirectories.setFrom(
+            files(
+                sourceSets.main
+                    .get()
+                    .allSource.srcDirs,
+            ),
+        )
+        classDirectories.setFrom(files(sourceSets.main.get().output))
+
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
+            html.outputLocation.set(layout.buildDirectory.dir("reports/jacoco/test"))
+        }
+    }
+
+    tasks.withType<JacocoCoverageVerification> {
+        violationRules {
+            rule {
+                limit {
+                    minimum = "0.70".toBigDecimal()
+                }
+            }
+        }
+    }
+
+    tasks.named("test") {
+        finalizedBy(tasks.withType<JacocoReport>())
+    }
+
+    tasks.named("check") {
+        dependsOn(tasks.withType<JacocoCoverageVerification>())
     }
 }
